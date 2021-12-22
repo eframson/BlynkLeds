@@ -1,19 +1,11 @@
-/*************************************************************
-
-  This is a simple demo of sending and receiving some data.
-  Be sure to check out other examples!
- *************************************************************/
-
 // Template ID, Device Name and Auth Token are provided by the Blynk.Cloud
 // See the Device Info tab, or Template settings
 #define BLYNK_TEMPLATE_ID           "TMPLZdpa9Dvn"
 #define BLYNK_DEVICE_NAME           "Quickstart Device"
 #define BLYNK_AUTH_TOKEN            "W_UT-tlwiB2ii8JGdVx7X18lI_KgOX5t"
 
-
 // Comment this out to disable prints and save space
 #define BLYNK_PRINT Serial
-
 
 #include <WiFi.h>
 #include <WiFiClient.h>
@@ -30,10 +22,20 @@
 
 char auth[] = BLYNK_AUTH_TOKEN;
 
-// Your WiFi credentials.
-// Set password to "" for open networks.
 const char* ssid = WIFI_SSID;
 const char* pass = WIFI_PASS;
+
+struct rgb {
+  int r;
+  int g;
+  int b;
+  rgb(){};
+  rgb(int r, int g, int b)
+    : r(r)
+    , g(g)
+    , b(b)
+  {};
+};
 
 int redVal=0;
 int blueVal=0;
@@ -42,10 +44,9 @@ int ledSetIdx=0;
 int ledPatternLength=0;
 int ledBrightness=255;
 bool delayShow=false;
-LinkedList<CRGB> ledPattern = LinkedList<CRGB>();
 
+LinkedList<rgb> ledPattern;
 CRGBArray<NUM_LEDS> leds;
-
 BlynkTimer timer;
 
 void ClearDisplay()
@@ -54,17 +55,14 @@ void ClearDisplay()
   for(int dot = 0; dot < NUM_LEDS; dot++) { 
       leds[dot] = CRGB::Black;
   }
-  for(int i = ledPatternLength - 1; i > -1; i--){
-    ledPattern.remove(i);
-  }
-  //ledPattern.clear();
+  ledPattern.clear();
   ledPatternLength = ledPattern.size();
   Blynk.virtualWrite(V1, ledPatternLength);
   delayShow=false;
 }
 
-CRGB GetRGB(int r, int g, int b) {
-  return CRGB(r,g,b);
+rgb* GetRGB(int r, int g, int b) {
+  return new rgb(r,g,b);
 }
 
 void SetPixel(bool doClear=false)
@@ -73,20 +71,23 @@ void SetPixel(bool doClear=false)
     //leds[ledSetIdx] = CRGB::Black;
   } else {
     if(ledSetIdx >= ledPatternLength){
-      ledPattern.add(GetRGB(redVal, greenVal, blueVal));
+      ledPattern.add(*GetRGB(redVal, greenVal, blueVal));
     } else {
-      ledPattern.set(ledSetIdx, GetRGB(redVal, greenVal, blueVal));
+      ledPattern.set(ledSetIdx, *GetRGB(redVal, greenVal, blueVal));
     }
   }
+  
   ledPatternLength = ledPattern.size();
   Blynk.virtualWrite(V1, ledPatternLength);
+  
   applyPatternToString();
 }
 
 void applyPatternToString(){
   delayShow=true;
   for (int i = 0; i <= NUM_LEDS; i++) {
-    leds[i] = ledPattern.get(i % ledPatternLength);
+    rgb thisPixel = ledPattern.get(i % ledPatternLength);
+    leds[i] = CRGB(thisPixel.r, thisPixel.g, thisPixel.b);
   }
   delayShow=false;
 }
@@ -158,6 +159,7 @@ BLYNK_WRITE(V11)
 // This function is called every time the device is connected to the Blynk.Cloud
 BLYNK_CONNECTED()
 {
+  Serial.println("Connected to Blynk.Cloud!");
   // Change Web Link Button message to "Congratulations!"
   Blynk.setProperty(V3, "offImageUrl", "https://static-image.nyc3.cdn.digitaloceanspaces.com/general/fte/congratulations.png");
   Blynk.setProperty(V3, "onImageUrl",  "https://static-image.nyc3.cdn.digitaloceanspaces.com/general/fte/congratulations_pressed.png");
