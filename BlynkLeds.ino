@@ -9,7 +9,6 @@
 
 #include <WiFi.h>
 #include <WiFiClient.h>
-#include <LinkedList.h>
 #include <BlynkSimpleEsp32.h>
 #include "FastLED.h"
 #include "wifi_config.h"
@@ -25,77 +24,62 @@ char auth[] = BLYNK_AUTH_TOKEN;
 const char* ssid = WIFI_SSID;
 const char* pass = WIFI_PASS;
 
-struct rgb {
-  int r;
-  int g;
-  int b;
-  rgb(){};
-  rgb(int r, int g, int b)
-    : r(r)
-    , g(g)
-    , b(b)
-  {};
-};
-
 int redVal=0;
 int blueVal=0;
 int greenVal=0;
 int ledSetIdx=0;
-int ledPatternLength=0;
 int ledBrightness=255;
-bool delayShow=false;
 
-LinkedList<rgb> ledPattern;
 CRGBArray<NUM_LEDS> leds;
+CRGBArray<NUM_LEDS> repeatingPattern;
+int repeatingPatternLength = 0;
 BlynkTimer timer;
 
 void ClearDisplay()
 {
-  delayShow=true;
-  for(int dot = 0; dot < NUM_LEDS; dot++) { 
-      leds[dot] = CRGB::Black;
+  for(int dot = 0; dot < NUM_LEDS; dot++) {
+    repeatingPattern[dot] = CRGB::Black;
   }
-  ledPattern.clear();
-  ledPatternLength = ledPattern.size();
-  Blynk.virtualWrite(V1, ledPatternLength);
-  delayShow=false;
-}
-
-rgb* GetRGB(int r, int g, int b) {
-  return new rgb(r,g,b);
+  ApplyPatternToString();
 }
 
 void SetPixel(bool doClear=false)
 {
-  if(doClear){
-    //leds[ledSetIdx] = CRGB::Black;
-  } else {
-    if(ledSetIdx >= ledPatternLength){
-      ledPattern.add(*GetRGB(redVal, greenVal, blueVal));
-    } else {
-      ledPattern.set(ledSetIdx, *GetRGB(redVal, greenVal, blueVal));
+  // case 1: removing a pixel from anywhere
+  if (doClear) {
+    if (ledSetIdx < repeatingPatternLength && repeatingPatternLength > 0) {
+      for (int i = ledSetIdx; i < NUM_LEDS-1; i++) {
+        repeatingPattern[i] = repeatingPattern[i+1];
+      }
+
+      repeatingPattern[NUM_LEDS-1] = CRGB::Black;
+      repeatingPatternLength--;
     }
+
+  // case 2: setting an existing pixel
+  } else if (ledSetIdx < repeatingPatternLength) {
+    repeatingPattern[ledSetIdx] = CRGB(redVal, greenVal, blueVal);
+
+  // case 3: adding a new pixel
+  } else if (ledSetIdx == repeatingPatternLength) {
+    repeatingPattern[ledSetIdx] = CRGB(redVal, greenVal, blueVal);
+    repeatingPatternLength++;
   }
-  
-  ledPatternLength = ledPattern.size();
-  Blynk.virtualWrite(V1, ledPatternLength);
-  
+
   ApplyPatternToString();
 }
 
 void ApplyPatternToString(){
-  delayShow=true;
   for (int i = 0; i <= NUM_LEDS; i++) {
-    rgb thisPixel = ledPattern.get(i % ledPatternLength);
-    leds[i] = CRGB(thisPixel.r, thisPixel.g, thisPixel.b);
+    leds[i] = repeatingPatternLength == 0
+      ? CRGB::Black
+      : repeatingPattern[i % repeatingPatternLength];
   }
-  delayShow=false;
 }
 
 BLYNK_WRITE(V0)
 {
   int value = param.asInt();
-  Blynk.virtualWrite(V1, ledPatternLength);
 }
 
 BLYNK_WRITE(V4)
@@ -162,10 +146,8 @@ void DoEverySecond()
 {
   UpdateUptime();
 
-  if(delayShow == false){
-    FastLED.setBrightness(ledBrightness);
-    FastLED.show();
-  }
+  FastLED.setBrightness(ledBrightness);
+  FastLED.show();
 }
 
 void UpdateUptime()
